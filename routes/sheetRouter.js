@@ -6,8 +6,6 @@ const keys = require('../keys.json')
 const sheetRouter = express.Router()
 sheetRouter.use(bodyParser.json())
 
-
-
 sheetRouter.route('/')
 .all((req, res, next) => {
     res.statusCode = 200
@@ -33,17 +31,72 @@ sheetRouter.route('/')
         dataArray[row] = [dataObject[row].value1, dataObject[row].value2]
     }
 
-    const request = {
+    const date = new Date()
+    const month = date.getMonth() + 1
+
+    const sheetVal = {
         spreadsheetId: req.body.spreadsheetId,
-        range: 'A2',
+        range: date.getFullYear()+"-"+month+"-"+date.getDate()+'!A2',
         valueInputOption: 'USER_ENTERED',
         resource: {values: dataArray}
     }
-    let response = await gsapi.spreadsheets.values.update(optValue)
-    // let response = await gsapi.spreadsheets.sheets.copyTo(request)
 
-    res.statusCode = response.status
-    res.end(response.statusText)
+    const newSheet = {
+        spreadsheetId: req.body.spreadsheetId,
+        resource: {
+            requests: [{
+                duplicateSheet: {
+                    "sourceSheetId": 0,
+                    "insertSheetIndex": 1,
+                    "newSheetId": date.getFullYear()+month+date.getDate(),
+                    "newSheetName": date.getFullYear()+"-"+month+"-"+date.getDate()
+                }
+            }
+            // , {
+            //     updateCells: {
+            //         rows: [{
+            //             values: [{
+            //                 userEnteredValue: {
+            //                     numberValue: dataArray[0][0]
+            //                 }
+            //             }]
+            //         }],
+            //         range: 
+            //         {
+            //             "sheetId": date.getFullYear()+month+date.getDate(),
+            //             "startRowIndex": 0,
+            //         }
+            //         // date.getFullYear()+"-"+month+"-"+date.getDate()+'!A2'
+            //     }
+            // }
+        ]
+        }
+    }
+    await gsapi.spreadsheets.batchUpdate(newSheet, async (err, response) => {
+        if (err) {
+            console.log(err.message)
+            return res.json({
+                statusCode: 400,
+                message: err.message
+            })
+        } else {
+            console.log('New Sheet has been Created')
+            await gsapi.spreadsheets.values.update(sheetVal, (err, response) => {
+                if (err) {
+                    console.log(err.message)
+                    return res.json({
+                        statusCode: 400,
+                        message: err.message
+                    })
+                } else {
+                    return res.json({
+                        statusCode: 200,
+                        message: 'New Data has been added to new sheet!'
+                    })
+                }
+            })
+        }
+    })
 })
 .put((req, res, next) => {
     res.statusCode = 403
