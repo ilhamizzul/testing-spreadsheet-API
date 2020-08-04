@@ -36,7 +36,7 @@ sheetRouter.route('/')
 
     const sheetVal = {
         spreadsheetId: req.body.spreadsheetId,
-        range: date.getFullYear()+"-"+month+"-"+date.getDate()+'!A2',
+        range: req.body.date+'!A2',
         valueInputOption: 'USER_ENTERED',
         resource: {values: dataArray}
     }
@@ -48,28 +48,10 @@ sheetRouter.route('/')
                 duplicateSheet: {
                     "sourceSheetId": 0,
                     "insertSheetIndex": 1,
-                    "newSheetId": date.getFullYear()+month+date.getDate(),
-                    "newSheetName": date.getFullYear()+"-"+month+"-"+date.getDate()
+                    // "newSheetId": req.body.date,
+                    "newSheetName": req.body.date
                 }
-            }
-            // , {
-            //     updateCells: {
-            //         rows: [{
-            //             values: [{
-            //                 userEnteredValue: {
-            //                     numberValue: dataArray[0][0]
-            //                 }
-            //             }]
-            //         }],
-            //         range: 
-            //         {
-            //             "sheetId": date.getFullYear()+month+date.getDate(),
-            //             "startRowIndex": 0,
-            //         }
-            //         // date.getFullYear()+"-"+month+"-"+date.getDate()+'!A2'
-            //     }
-            // }
-        ]
+            }]
         }
     }
     await gsapi.spreadsheets.batchUpdate(newSheet, async (err, response) => {
@@ -90,8 +72,9 @@ sheetRouter.route('/')
                     })
                 } else {
                     return res.json({
-                        statusCode: 200,
-                        message: 'New Data has been added to new sheet!'
+                        "statusCode": 200,
+                        "message": 'New Data has been added to new sheet!',
+                        "spreadsheetId": req.body.spreadsheetId
                     })
                 }
             })
