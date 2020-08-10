@@ -103,10 +103,6 @@ sheetRouter.route('/newSpreadsheet')
         const dataObject = req.body.data
         const dataArray = []
 
-        // for (let row = 0; row < dataObject.length; row++) {
-        //     dataArray[row] = [dataObject[row].coa, dataObject[row].type, dataObject[row].description, dataObject[row].current_month, dataObject[row].budget, dataObject[row].yeartodate]
-        // }
-
         dataObject.forEach(data => {
             dataArray.push([data.coa, data.type, data.description, data.current_month, data.budget, data.yeartodate])
         });
@@ -121,44 +117,51 @@ sheetRouter.route('/newSpreadsheet')
         }
 
         await gsapi.spreadsheets.values.update(sheetVal).then(async (response) => {
-            const requestData = {
-                spreadsheetId: req.body.spreadsheetId,
-                ranges: [],
-                includeGridData: true,
-            };
-            return await gsapi.spreadsheets.get(requestData)
-        }, (err) => next(err))
-        .then(async (sheetData) => {
-
-            // res.json(sheetData.data)
-
-            const copyRequest = []
-
-            // Get all sheet ID
-            for (let sheet = 0; sheet < sheetData.data.sheets.length; sheet++) {
-                copyRequest[sheet] = {
+                const requestData = {
                     spreadsheetId: req.body.spreadsheetId,
-                    sheetId: sheetData.data.sheets[sheet].properties.sheetId,
-                    resource: {
-                        destinationSpreadsheetId: req.body.destination_spreadsheetId,
+                    ranges: [],
+                    includeGridData: true,
+                };
+                return await gsapi.spreadsheets.get(requestData)
+            }, (err) => next(err))
+            .then(async (sheetData) => {
+
+                const copyRequest = []
+
+                // Get all sheet ID
+                for (let sheet = 0; sheet < sheetData.data.sheets.length; sheet++) {
+                    copyRequest[sheet] = {
+                        spreadsheetId: req.body.spreadsheetId,
+                        sheetId: sheetData.data.sheets[sheet].properties.sheetId,
+                        resource: {
+                            destinationSpreadsheetId: req.body.destination_spreadsheetId,
+                        }
                     }
                 }
-            }
-            const resultStatus = []
-            copyRequest.forEach(async (request) => {
-                await gsapi.spreadsheets.sheets.copyTo(request, async (err, response) => {
-                    await resultStatus.push({statusCopy: response})
+                const resultStatus = []
+                copyRequest.forEach(async (request) => {
+                    await delay()
+                    await gsapi.spreadsheets.sheets.copyTo(request)
+                });
+
+                res.statusCode = 200
+                res.json({
+                    message: 'Copy Data Success',
+                    copySheetStatus: resultStatus
                 })
-            });
 
-            res.statusCode = 200
-            res.json({
-                message: 'Copy Data Success',
-                copySheetStatus: resultStatus
-            })
-
-        }, (err) => next(err))
-        .catch((err) => next(err))
+            }, (err) => next(err))
+            .catch((err) => next(err))
     })
+
+function delay() {
+    // `delay` returns a promise
+    return new Promise(function (resolve, reject) {
+        // Only `delay` is able to resolve or reject the promise
+        setTimeout(function () {
+            resolve(); // After 3 seconds, resolve the promise with value 42
+        }, 2000);
+    });
+}
 
 module.exports = sheetRouter
