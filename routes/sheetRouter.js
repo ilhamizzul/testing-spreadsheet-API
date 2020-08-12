@@ -154,88 +154,79 @@ sheetRouter.route('/newSpreadsheet')
             var processCopyRequest = async (x) => {
                 console.log(x)
                 if (x < copyRequest.length) {
-                    await gsapi.spreadsheets.sheets.copyTo(copyRequest[x])    
+                    await gsapi.spreadsheets.sheets.copyTo(copyRequest[x]).then(async () => {
+                        const requestDestinationData = {
+                            spreadsheetId: req.body.destination_spreadsheetId,
+                            ranges: [],
+                            includeGridData: false
+                        }
+                        await delay()
+                        return await gsapi.spreadsheets.get(requestDestinationData)
+                    }).then(async (sheetData) => {
+                        const updateRequest = {
+                            spreadsheetId: req.body.destination_spreadsheetId,
+                            resource: {
+                                requests: [
+                                    
+                                ],
+                            },
+                        }
+
+                        var processCondition = async (i) => {
+                            if (i < sheetData.data.sheets.length) {
+                                var strSheet = sheetData.data.sheets[i].properties.title
+                                console.log(sheetData.data.sheets[i].properties.title)
+                                if(strSheet == 'Sheet1') {
+                                    updateRequest.resource.requests.push(
+                                        {"deleteSheet": {
+                                            sheetId: sheetData.data.sheets[i].properties.sheetId,
+                                        }}
+                                    )
+                                }
+                                if(strSheet.slice(0,8) == 'Copy of ') {
+                                    updateRequest.resource.requests.push(
+                                        {"updateSheetProperties": {
+                                            properties: {
+                                                sheetId: sheetData.data.sheets[i].properties.sheetId,
+                                                title: strSheet.slice(8),
+                                                index: i
+                                            },
+                                            fields: "index,title"
+                                        }}
+                                    )
+                                }
+                                await processCondition(i+1)
+                            }
+                        }
+
+                        await processCondition(0)
+
+                        return await gsapi.spreadsheets.batchUpdate(updateRequest)
+
+                    })
+
                     await processCopyRequest(x+1)
                 }
             }
 
-            processCopyRequest(0)
-
-            // copyRequest.forEach(async (request) => {
-            //     // await delay()
-            //     await gsapi.spreadsheets.sheets.copyTo(request)
-            // });
-
-            const requestDestinationData = {
-                spreadsheetId: req.body.destination_spreadsheetId,
-                ranges: [],
-                includeGridData: false
-            }
-            await delay()
-            return await gsapi.spreadsheets.get(requestDestinationData)
-        }, (err) => next(err))
-        .then(async (sheetData) => {
-            const updateRequest = {
-                spreadsheetId: req.body.destination_spreadsheetId,
-                resource: {
-                    requests: [
-                        
-                    ],
-                },
-            }
-            var processCondition = async (x) => {
-                if (x < sheetData.data.sheets.length) {
-                    console.log(sheetData.data.sheets[x].properties.title)
-                    if(sheetData.data.sheets[x].properties.title == 'tmp') {
-                        updateRequest.resource.requests.push(
-                            {"deleteSheet": {
-                                sheetId: sheetData.data.sheets[x].properties.sheetId,
-                            }}
-                        )
-                    }
-                    else if(sheetData.data.sheets[x].properties.title == 'Copy of MasterData') {
-                        updateRequest.resource.requests.push(
-                            {"updateSheetProperties": {
-                                properties: {
-                                    sheetId: sheetData.data.sheets[x].properties.sheetId,
-                                    title: 'MasterData',
-                                    index: 1
-                                },
-                                fields: "index,title"
-                            }}
-                        )
-                    }
-                    await processCondition(x+1)
-                }
-            }
-            await processCondition(0)
-            await gsapi.spreadsheets.batchUpdate(updateRequest).then((result) => {
+            processCopyRequest(0).then(((result) => {
                 res.statusCode = 200
                 res.json({
                     message: 'Copy Data Success',
                     destinationSpreadsheet: `https://docs.google.com/spreadsheets/d/${req.body.destination_spreadsheetId}/edit#gid=0`,
                     spreadsheetId: req.body.destination_spreadsheetId,
                     propertyName: req.body.propertyName,
-                    createdAt: dateNow,
-                    replies: result.replies
+                    createdAt: dateNow
                 })
-            })
-        })
+            }))
+        }, (err) => next(err))
         .catch((err) => next(err))
     })
 
 function delay() {
-    // `delay` returns a promise
-    return new Promise(function (resolve, reject) {
-        // Only `delay` is able to resolve or reject the promise
-        setTimeout(function () {
-            resolve(); // After 3 seconds, resolve the promise with value 42
-        }, 2000);
+    return new Promise((resolve) => {
+        setTimeout(() => resolve(), 1000);
     });
 }
-
-// function delay() {
-//     return new Promise(resolve => setTimeout(resolve, 300));
-// }
 
 module.exports = sheetRouter
