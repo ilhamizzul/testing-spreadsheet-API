@@ -101,57 +101,127 @@ sheetRouter.route('/newSpreadsheet')
             auth: client
         })
         const dataObject = req.body.data
-        const dataArray = []
-
+        const date = new Date()
+        const dateNow = date.getFullYear() + '-' + date.getMonth() + '-' + date.getDay()
+        const dataBodyArray = []
+        const dataHeaderArray = [[req.body.propertyName], [req.body.date], [req.body.printedBy], [dateNow]]
+        
         dataObject.forEach(data => {
-            dataArray.push([data.coa, data.type, data.description, data.current_month, data.budget, data.yeartodate])
+            dataBodyArray.push([data.coa, data.type, data.description, data.current_month, data.budget, data.yeartodate])
         });
+
+        const data = [
+            {
+                range: 'A8',
+                values: dataBodyArray
+            },
+            {
+                range: 'masterData!C1:C4',
+                values: dataHeaderArray
+            }
+        ]
 
         const sheetVal = {
             spreadsheetId: req.body.spreadsheetId,
-            range: 'A8',
-            valueInputOption: 'USER_ENTERED',
             resource: {
-                values: dataArray
+                data: data,
+                valueInputOption: 'USER_ENTERED'
             }
         }
 
-        await gsapi.spreadsheets.values.update(sheetVal).then(async (response) => {
-                const requestData = {
+        await gsapi.spreadsheets.values.batchUpdate(sheetVal).then(async (response) => {
+            const requestData = {
+                spreadsheetId: req.body.spreadsheetId,
+                ranges: [],
+                includeGridData: true,
+            };
+            return await gsapi.spreadsheets.get(requestData)
+        }, (err) => next(err))
+        .then(async (sheetData) => {
+
+            const copyRequest = []
+
+            // Get all sheet ID
+            for (let sheet = 0; sheet < sheetData.data.sheets.length; sheet++) {
+                copyRequest[sheet] = {
                     spreadsheetId: req.body.spreadsheetId,
-                    ranges: [],
-                    includeGridData: true,
-                };
-                return await gsapi.spreadsheets.get(requestData)
-            }, (err) => next(err))
-            .then(async (sheetData) => {
-
-                const copyRequest = []
-
-                // Get all sheet ID
-                for (let sheet = 0; sheet < sheetData.data.sheets.length; sheet++) {
-                    copyRequest[sheet] = {
-                        spreadsheetId: req.body.spreadsheetId,
-                        sheetId: sheetData.data.sheets[sheet].properties.sheetId,
-                        resource: {
-                            destinationSpreadsheetId: req.body.destination_spreadsheetId,
-                        }
+                    sheetId: sheetData.data.sheets[sheet].properties.sheetId,
+                    resource: {
+                        destinationSpreadsheetId: req.body.destination_spreadsheetId,
                     }
                 }
-                const resultStatus = []
-                copyRequest.forEach(async (request) => {
-                    await delay()
-                    await gsapi.spreadsheets.sheets.copyTo(request)
-                });
+            }
+            var processCopyRequest = async (x) => {
+                console.log(x)
+                if (x < copyRequest.length) {
+                    await gsapi.spreadsheets.sheets.copyTo(copyRequest[x])    
+                    await processCopyRequest(x+1)
+                }
+            }
 
+            processCopyRequest(0)
+
+            // copyRequest.forEach(async (request) => {
+            //     // await delay()
+            //     await gsapi.spreadsheets.sheets.copyTo(request)
+            // });
+
+            const requestDestinationData = {
+                spreadsheetId: req.body.destination_spreadsheetId,
+                ranges: [],
+                includeGridData: false
+            }
+            await delay()
+            return await gsapi.spreadsheets.get(requestDestinationData)
+        }, (err) => next(err))
+        .then(async (sheetData) => {
+            const updateRequest = {
+                spreadsheetId: req.body.destination_spreadsheetId,
+                resource: {
+                    requests: [
+                        
+                    ],
+                },
+            }
+            var processCondition = async (x) => {
+                if (x < sheetData.data.sheets.length) {
+                    console.log(sheetData.data.sheets[x].properties.title)
+                    if(sheetData.data.sheets[x].properties.title == 'tmp') {
+                        updateRequest.resource.requests.push(
+                            {"deleteSheet": {
+                                sheetId: sheetData.data.sheets[x].properties.sheetId,
+                            }}
+                        )
+                    }
+                    else if(sheetData.data.sheets[x].properties.title == 'Copy of MasterData') {
+                        updateRequest.resource.requests.push(
+                            {"updateSheetProperties": {
+                                properties: {
+                                    sheetId: sheetData.data.sheets[x].properties.sheetId,
+                                    title: 'MasterData',
+                                    index: 1
+                                },
+                                fields: "index,title"
+                            }}
+                        )
+                    }
+                    await processCondition(x+1)
+                }
+            }
+            await processCondition(0)
+            await gsapi.spreadsheets.batchUpdate(updateRequest).then((result) => {
                 res.statusCode = 200
                 res.json({
                     message: 'Copy Data Success',
-                    copySheetStatus: resultStatus
+                    destinationSpreadsheet: `https://docs.google.com/spreadsheets/d/${req.body.destination_spreadsheetId}/edit#gid=0`,
+                    spreadsheetId: req.body.destination_spreadsheetId,
+                    propertyName: req.body.propertyName,
+                    createdAt: dateNow,
+                    replies: result.replies
                 })
-
-            }, (err) => next(err))
-            .catch((err) => next(err))
+            })
+        })
+        .catch((err) => next(err))
     })
 
 function delay() {
@@ -163,5 +233,9 @@ function delay() {
         }, 2000);
     });
 }
+
+// function delay() {
+//     return new Promise(resolve => setTimeout(resolve, 300));
+// }
 
 module.exports = sheetRouter

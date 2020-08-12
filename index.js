@@ -1,6 +1,7 @@
 const express = require('express')
 const http = require('http')
 const bodyParser = require('body-parser')
+const morgan = require('morgan')
 
 const sheetRouter = require('./routes/sheetRouter')
 const hostname = 'localhost'
@@ -8,6 +9,7 @@ const port = 3000
 
 const app = express()
 app.use(bodyParser.json())
+app.use(morgan('dev'))
 app.use('/sheet', sheetRouter)
 
 // catch 404 and forward to error handler
