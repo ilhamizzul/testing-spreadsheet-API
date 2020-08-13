@@ -152,7 +152,6 @@ sheetRouter.route('/newSpreadsheet')
                 }
             }
             var processCopyRequest = async (x) => {
-                console.log(x)
                 if (x < copyRequest.length) {
                     await gsapi.spreadsheets.sheets.copyTo(copyRequest[x]).then(async () => {
                         const requestDestinationData = {
@@ -163,6 +162,7 @@ sheetRouter.route('/newSpreadsheet')
                         await delay()
                         return await gsapi.spreadsheets.get(requestDestinationData)
                     }).then(async (sheetData) => {
+
                         const updateRequest = {
                             spreadsheetId: req.body.destination_spreadsheetId,
                             resource: {
@@ -175,7 +175,6 @@ sheetRouter.route('/newSpreadsheet')
                         var processCondition = async (i) => {
                             if (i < sheetData.data.sheets.length) {
                                 var strSheet = sheetData.data.sheets[i].properties.title
-                                console.log(sheetData.data.sheets[i].properties.title)
                                 if(strSheet == 'Sheet1') {
                                     updateRequest.resource.requests.push(
                                         {"deleteSheet": {
@@ -201,15 +200,26 @@ sheetRouter.route('/newSpreadsheet')
 
                         await processCondition(0)
 
-                        return await gsapi.spreadsheets.batchUpdate(updateRequest)
+                        await gsapi.spreadsheets.batchUpdate(updateRequest).then().catch((err) => {
+                            next(err.message)
+                            x = 9999
+                        })
 
                     })
 
                     await processCopyRequest(x+1)
                 }
+                if (x == 9999) {
+                    const err = new Error('Data Duplicated!')
+                    err.status = 500
+                    return err;
+                }
             }
 
-            processCopyRequest(0).then(((result) => {
+            processCopyRequest(0).then((err) => {
+                if (err) {
+                    return next(err)
+                }
                 res.statusCode = 200
                 res.json({
                     message: 'Copy Data Success',
@@ -218,7 +228,7 @@ sheetRouter.route('/newSpreadsheet')
                     propertyName: req.body.propertyName,
                     createdAt: dateNow
                 })
-            }))
+            })
         }, (err) => next(err))
         .catch((err) => next(err))
     })
