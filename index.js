@@ -2,6 +2,7 @@ const express = require('express')
 const http = require('http')
 const bodyParser = require('body-parser')
 const morgan = require('morgan')
+require('dotenv').config()
 
 const sheetRouter = require('./routes/sheetRouter')
 const hostname = 'localhost'
